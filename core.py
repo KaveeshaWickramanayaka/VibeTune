@@ -27,6 +27,16 @@ class Song:
     @classmethod
     def from_dict(cls, data):
         return cls(**data)
+    
+    def __eq__(self, other):
+        """Custom equality check based on title and artist"""
+        if isinstance(other, Song):
+            return self.title == other.title and self.artist == other.artist
+        return False
+    
+    def __hash__(self):
+        """Make Song hashable for use in sets/dicts"""
+        return hash((self.title, self.artist))
 
 class Playlist:
     def __init__(self, name: str):
@@ -54,7 +64,10 @@ class Playlist:
     @classmethod
     def from_dict(cls, data):
         playlist = cls(data['name'])
-        playlist.songs = [Song.from_dict(song_data) for song_data in data['songs']]
+        songs_data = data.get('songs', [])
+        for song_data in songs_data:
+            song = Song.from_dict(song_data)
+            playlist.songs.append(song)
         return playlist
 
 class MusicPlayer:
@@ -67,6 +80,14 @@ class MusicPlayer:
         self.current_mood: str = "All"
         self._load_default_library()
         self._load_playlists()
+        self._ensure_default_playlists()
+    
+    def _ensure_default_playlists(self):
+        """Create default playlists if they don't exist"""
+        default_playlists = ["Liked Songs", "Workout", "Chill", "Focus"]
+        for name in default_playlists:
+            if name not in self.playlists:
+                self.create_playlist(name)
     
     def _load_default_library(self):
         default_songs = [
@@ -91,8 +112,16 @@ class MusicPlayer:
     
     def _load_playlists(self):
         try:
-            if os.path.exists("playlists.json"):
-                with open("playlists.json", "r") as f:
+            # Check current working directory first
+            playlist_path = "playlists.json"
+            
+            # Try current directory first, then script directory
+            if not os.path.exists(playlist_path):
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                playlist_path = os.path.join(script_dir, "playlists.json")
+            
+            if os.path.exists(playlist_path):
+                with open(playlist_path, "r") as f:
                     playlist_data = json.load(f)
                     for name, data in playlist_data.items():
                         self.playlists[name] = Playlist.from_dict(data)
@@ -101,8 +130,12 @@ class MusicPlayer:
     
     def save_playlists(self) -> bool:
         try:
+            # Save in the same directory as the script
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            playlist_path = os.path.join(script_dir, "playlists.json")
+            
             playlist_data = {name: playlist.to_dict() for name, playlist in self.playlists.items()}
-            with open("playlists.json", "w") as f:
+            with open(playlist_path, "w") as f:
                 json.dump(playlist_data, f, indent=2)
             return True
         except Exception as e:
@@ -120,10 +153,108 @@ class MusicPlayer:
             return True
         return False
     
+    def delete_playlist(self, name: str) -> bool:
+        print(f"DEBUG: core.delete_playlist called with name: '{name}'")
+        print(f"DEBUG: Available playlists: {list(self.playlists.keys())}")
+        if name in self.playlists:
+            print(f"DEBUG: Playlist '{name}' found, deleting...")
+            del self.playlists[name]
+            print(f"DEBUG: Playlist deleted. Remaining playlists: {list(self.playlists.keys())}")
+            return True
+        else:
+            print(f"DEBUG: Playlist '{name}' not found!")
+            return False
+    
+    def rename_playlist(self, old_name: str, new_name: str) -> bool:
+        if old_name in self.playlists and new_name not in self.playlists:
+            self.playlists[new_name] = self.playlists.pop(old_name)
+            self.playlists[new_name].name = new_name
+            return True
+        return False
+    
     def add_to_playlist(self, playlist_name: str, song: Song) -> bool:
         if playlist_name in self.playlists:
             return self.playlists[playlist_name].add_song(song)
         return False
+    
+    def remove_from_playlist(self, playlist_name: str, song: Song) -> bool:
+        if playlist_name in self.playlists:
+            return self.playlists[playlist_name].remove_song(song)
+        return False
+    
+    def get_playlist_songs(self, playlist_name: str) -> List[Song]:
+        if playlist_name in self.playlists:
+            return self.playlists[playlist_name].songs.copy()
+        return []
+    
+    def playlist_exists(self, playlist_name: str) -> bool:
+        return playlist_name in self.playlists
+    
+    def toggle_like_song(self, song: Song) -> bool:
+        """Add/remove song from 'Liked Songs' playlist"""
+        print(f"DEBUG: core.toggle_like_song called with: {song.title} by {song.artist}")
+        if "Liked Songs" not in self.playlists:
+            print("DEBUG: 'Liked Songs' playlist not found, creating it...")
+            self.create_playlist("Liked Songs")
+        
+        liked_playlist = self.playlists["Liked Songs"]
+        print(f"DEBUG: Liked playlist has {len(liked_playlist.songs)} songs before toggle")
+        
+        if song in liked_playlist.songs:
+            print("DEBUG: Song is already liked, removing...")
+            result = liked_playlist.remove_song(song)  # Unlike
+            print(f"DEBUG: Remove result: {result}")
+            return result
+        else:
+            print("DEBUG: Song is not liked, adding...")
+            result = liked_playlist.add_song(song)  # Like
+            print(f"DEBUG: Add result: {result}")
+            return result
+    
+    def is_song_liked(self, song: Song) -> bool:
+        """Check if a song is in Liked Songs playlist"""
+        if "Liked Songs" in self.playlists:
+            return song in self.playlists["Liked Songs"].songs
+        return False
+    
+    def get_playlist_stats(self, playlist_name: str) -> Dict:
+        if playlist_name not in self.playlists:
+            return {}
+        
+        playlist = self.playlists[playlist_name]
+        if not playlist.songs:
+            return {"total_songs": 0, "total_duration": "0:00"}
+        
+        total_seconds = sum(self._parse_duration(song.duration) for song in playlist.songs)
+        moods = [song.mood for song in playlist.songs]
+        artists = [song.artist for song in playlist.songs]
+        
+        return {
+            "total_songs": len(playlist.songs),
+            "total_duration": self._format_duration(total_seconds),
+            "most_common_mood": max(set(moods), key=moods.count) if moods else "None",
+            "most_common_artist": max(set(artists), key=artists.count) if artists else "None",
+            "average_energy": round(sum(song.energy for song in playlist.songs) / len(playlist.songs), 1),
+            "average_valence": round(sum(song.valence for song in playlist.songs) / len(playlist.songs), 1)
+        }
+    
+    def _parse_duration(self, duration_str: str) -> int:
+        """Convert "3:45" to seconds"""
+        try:
+            parts = duration_str.split(':')
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+            return 0
+        except:
+            return 0
+    
+    def _format_duration(self, total_seconds: int) -> str:
+        """Convert seconds to "HH:MM" format"""
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        if hours > 0:
+            return f"{hours}:{minutes:02d}"
+        return f"{minutes}"
     
     def play_song(self, song: Song) -> None:
         filtered_music = self.get_filtered_music()

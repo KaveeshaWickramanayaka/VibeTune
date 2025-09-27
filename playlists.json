@@ -1,5 +1,48 @@
 {
-  "My Favorites": [],
-  "Workout": [],
-  "Chill": []
+  "Liked Songs": {
+    "name": "Liked Songs",
+    "songs": [
+      {
+        "title": "Walking on Sunshine",
+        "artist": "Katrina and the Waves",
+        "mood": "Happy",
+        "energy": 88,
+        "valence": 92,
+        "duration": "3:58"
+      },
+      {
+        "title": "Blinding Lights",
+        "artist": "The Weeknd",
+        "mood": "Energetic",
+        "energy": 95,
+        "valence": 85,
+        "duration": "3:20"
+      }
+    ]
+  },
+  "Workout": {
+    "name": "Workout",
+    "songs": []
+  },
+  "Chill": {
+    "name": "Chill",
+    "songs": []
+  },
+  "Focus": {
+    "name": "Focus",
+    "songs": []
+  },
+  "Sad": {
+    "name": "Sad",
+    "songs": [
+      {
+        "title": "Everybody Hurts",
+        "artist": "R.E.M.",
+        "mood": "Sad",
+        "energy": 40,
+        "valence": 20,
+        "duration": "5:17"
+      }
+    ]
+  }
 }
