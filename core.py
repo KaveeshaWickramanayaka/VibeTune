@@ -1,5 +1,5 @@
-import os;
-import json;
+import os
+import json
 import time
 import pygame
 import threading
@@ -8,13 +8,12 @@ from typing import List, Dict, Optional, Callable
 
 @dataclass
 class Song:
-    """Represents a song with its metadata."""
     title: str
     artist: str
     mood: str
     duration: float
     filepath: Optional[str] = None
-    
+
     def to_dict(self):
         return self.__dict__
 
@@ -22,23 +21,60 @@ class Song:
     def from_dict(cls, data):
         return cls(**data)
 
+class Node:
+    def __init__(self, data: Song):
+        self.data = data
+        self.next: Optional["Node"] = None
+
+class LinkedList:
+    def __init__(self):
+        self.head: Optional[Node] = None
+        self.size = 0
+
+    def append(self, song: Song):
+        new_node = Node(song)
+        if not self.head:
+            self.head = new_node
+        else:
+            current = self.head
+            while current.next:
+                current = current.next
+            current.next = new_node
+        self.size += 1
+
+    def to_list(self) -> List[Song]:
+        songs = []
+        current = self.head
+        while current:
+            songs.append(current.data)
+            current = current.next
+        return songs
+
+    def __iter__(self):
+        current = self.head
+        while current:
+            yield current.data
+            current = current.next
+
+    def __len__(self):
+        return self.size
+
 @dataclass
 class Playlist:
-    """Represents a user-created playlist."""
     name: str
-    songs: List[Song] = field(default_factory=list)
+    songs: LinkedList = field(default_factory=LinkedList)
 
     def to_dict(self):
-        return {'name': self.name, 'songs': [s.to_dict() for s in self.songs]}
+        return {"name": self.name, "songs": [s.to_dict() for s in self.songs]}
 
     @classmethod
     def from_dict(cls, data):
-        playlist = cls(name=data['name'])
-        playlist.songs = [Song.from_dict(s_data) for s_data in data.get('songs', [])]
+        playlist = cls(name=data["name"])
+        for s_data in data.get("songs", []):
+            playlist.songs.append(Song.from_dict(s_data))
         return playlist
 
 class MusicPlayer:
-    """Handles all backend logic: music playback, library, and playlists."""
     def __init__(self):
         pygame.init()
         pygame.mixer.init()
@@ -47,24 +83,23 @@ class MusicPlayer:
         self.current_song_list: List[Song] = []
         self.current_song_index: int = -1
         self.is_playing: bool = False
-        
         self._load_default_library()
         self._load_playlists()
 
     def _load_default_library(self):
         default_songs = [
-            {'title': 'Happy', 'artist': 'Pharrell Williams', 'mood': 'Happy', 'duration': 233},
-            {'title': 'Walking on Sunshine', 'artist': 'Katrina & The Waves', 'mood': 'Happy', 'duration': 238},
-            {'title': 'Uptown Funk', 'artist': 'Mark Ronson ft. Bruno Mars', 'mood': 'Happy', 'duration': 270},
-            {'title': 'Blinding Lights', 'artist': 'The Weeknd', 'mood': 'Energetic', 'duration': 200},
-            {'title': 'Don\'t Stop Me Now', 'artist': 'Queen', 'mood': 'Energetic', 'duration': 209},
-            {'title': 'Eye of the Tiger', 'artist': 'Survivor', 'mood': 'Energetic', 'duration': 245},
-            {'title': 'Someone Like You', 'artist': 'Adele', 'mood': 'Sad', 'duration': 285},
-            {'title': 'Hallelujah', 'artist': 'Jeff Buckley', 'mood': 'Sad', 'duration': 415},
-            {'title': 'Fix You', 'artist': 'Coldplay', 'mood': 'Sad', 'duration': 295},
-            {'title': 'Weightless', 'artist': 'Marconi Union', 'mood': 'Calm', 'duration': 488},
-            {'title': 'Clair de Lune', 'artist': 'Claude Debussy', 'mood': 'Calm', 'duration': 303},
-            {'title': 'Orinoco Flow', 'artist': 'Enya', 'mood': 'Calm', 'duration': 266},
+            {"title": "Happy", "artist": "Pharrell Williams", "mood": "Happy", "duration": 233},
+            {"title": "Walking on Sunshine", "artist": "Katrina & The Waves", "mood": "Happy", "duration": 238},
+            {"title": "Uptown Funk", "artist": "Mark Ronson ft. Bruno Mars", "mood": "Happy", "duration": 270},
+            {"title": "Blinding Lights", "artist": "The Weeknd", "mood": "Energetic", "duration": 200},
+            {"title": "Don't Stop Me Now", "artist": "Queen", "mood": "Energetic", "duration": 209},
+            {"title": "Eye of the Tiger", "artist": "Survivor", "mood": "Energetic", "duration": 245},
+            {"title": "Someone Like You", "artist": "Adele", "mood": "Sad", "duration": 285},
+            {"title": "Hallelujah", "artist": "Jeff Buckley", "mood": "Sad", "duration": 415},
+            {"title": "Fix You", "artist": "Coldplay", "mood": "Sad", "duration": 295},
+            {"title": "Weightless", "artist": "Marconi Union", "mood": "Calm", "duration": 488},
+            {"title": "Clair de Lune", "artist": "Claude Debussy", "mood": "Calm", "duration": 303},
+            {"title": "Orinoco Flow", "artist": "Enya", "mood": "Calm", "duration": 266},
         ]
         self.music_library = [Song(**s) for s in default_songs]
 
@@ -77,7 +112,6 @@ class MusicPlayer:
                         playlist = Playlist.from_dict(p_data)
                         self.playlists[playlist.name] = playlist
             except (json.JSONDecodeError, TypeError):
-                print("Could not load playlists.json, starting fresh.")
                 self.playlists = {}
 
     def save_playlists(self):
@@ -99,22 +133,23 @@ class MusicPlayer:
         if name and name not in self.playlists:
             self.playlists[name] = Playlist(name=name)
             self.save_playlists()
-            return True;
-        return False;
+            return True
+        return False
 
     def delete_playlist(self, name: str):
         if name in self.playlists:
-            del self.playlists[name];
+            del self.playlists[name]
             self.save_playlists()
 
     def add_song_to_playlist(self, playlist_name: str, song: Song) -> bool:
         if playlist_name in self.playlists:
-            if not any(s.filepath == song.filepath for s in self.playlists[playlist_name].songs if s.filepath and song.filepath):
-                self.playlists[playlist_name].songs.append(song)
+            playlist = self.playlists[playlist_name]
+            if not any(s.filepath == song.filepath for s in playlist.songs if s.filepath and song.filepath):
+                playlist.songs.append(song)
                 self.save_playlists()
-                return True;
-        return False;
-        
+                return True
+        return False
+
     def get_songs_by_mood(self, mood: str) -> List[Song]:
         if mood == "All":
             return self.music_library[:]
@@ -124,7 +159,6 @@ class MusicPlayer:
         self.current_song_list = song_list
         self.current_song_index = song_index
         song = self.get_current_song()
-
         pygame.mixer.music.stop()
         if song and song.filepath and os.path.exists(song.filepath):
             try:
@@ -147,14 +181,14 @@ class MusicPlayer:
 
     def toggle_play_pause(self):
         song = self.get_current_song()
-        if not song: return
-        
+        if not song:
+            return
         if song.filepath and os.path.exists(song.filepath):
             if self.is_playing:
-                if pygame.mixer.music.get_busy(): pygame.mixer.music.pause()
+                if pygame.mixer.music.get_busy():
+                    pygame.mixer.music.pause()
             else:
                 pygame.mixer.music.unpause()
-        
         self.is_playing = not self.is_playing
 
     def next_song(self):
@@ -169,7 +203,7 @@ class MusicPlayer:
 
     def set_volume(self, volume_level):
         pygame.mixer.music.set_volume(float(volume_level))
-        
+
     def get_playback_position(self):
         song = self.get_current_song()
         if song and song.filepath and os.path.exists(song.filepath) and pygame.mixer.music.get_busy():
@@ -186,13 +220,13 @@ class SortingManager:
         self.swaps = 0
         self.delay = 0.1
 
-    def sort_in_thread(self, algorithm: str, songs: List[Song]):
-        if self.is_sorting: return
-        
+    def sort_in_thread(self, algorithm: str, songs_source):
+        songs = songs_source.to_list() if isinstance(songs_source, LinkedList) else songs_source
+        if self.is_sorting:
+            return
         self.is_sorting = True
         self.comparisons = 0
         self.swaps = 0
-        
         thread = threading.Thread(target=self._run_sort, args=(algorithm, songs))
         thread.daemon = True
         thread.start()
@@ -200,7 +234,6 @@ class SortingManager:
     def _run_sort(self, algorithm: str, songs: List[Song]):
         sorter = getattr(self, f"_{algorithm.lower().replace(' ', '_')}")
         sorter(songs)
-        
         self.update_callback(songs, {})
         self.is_sorting = False
         self.finished_callback()
@@ -210,43 +243,58 @@ class SortingManager:
         for i in range(n):
             swapped = False
             for j in range(0, n - i - 1):
-                if not self.is_sorting: return
-                self.comparisons += 1; self.stats_callback(self.comparisons, self.swaps)
-                self.update_callback(songs, {'compare': [j, j + 1]}); time.sleep(self.delay)
+                if not self.is_sorting:
+                    return
+                self.comparisons += 1
+                self.stats_callback(self.comparisons, self.swaps)
+                self.update_callback(songs, {"compare": [j, j + 1]})
+                time.sleep(self.delay)
                 if songs[j].title.lower() > songs[j + 1].title.lower():
                     songs[j], songs[j + 1] = songs[j + 1], songs[j]
                     self.swaps += 1
-                    self.update_callback(songs, {'swap': [j, j + 1]}); time.sleep(self.delay)
-            if not swapped: break
+                    self.update_callback(songs, {"swap": [j, j + 1]})
+                    time.sleep(self.delay)
+            if not swapped:
+                break
 
     def _selection_sort(self, songs: List[Song]):
         n = len(songs)
         for i in range(n):
-            min_idx = i;
+            min_idx = i
             for j in range(i + 1, n):
-                if not self.is_sorting: return
-                self.comparisons += 1; self.stats_callback(self.comparisons, self.swaps)
-                self.update_callback(songs, {'compare': [j, min_idx], 'min': min_idx}); time.sleep(self.delay)
+                if not self.is_sorting:
+                    return
+                self.comparisons += 1
+                self.stats_callback(self.comparisons, self.swaps)
+                self.update_callback(songs, {"compare": [j, min_idx], "min": min_idx})
+                time.sleep(self.delay)
                 if songs[j].title.lower() < songs[min_idx].title.lower():
-                    min_idx = j;
+                    min_idx = j
             if min_idx != i:
                 songs[i], songs[min_idx] = songs[min_idx], songs[i]
                 self.swaps += 1
-                self.update_callback(songs, {'swap': [i, min_idx]}); time.sleep(self.delay)
+                self.update_callback(songs, {"swap": [i, min_idx]})
+                time.sleep(self.delay)
 
     def _insertion_sort(self, songs: List[Song]):
         for i in range(1, len(songs)):
             key_song = songs[i]
-            j = i - 1;
+            j = i - 1
             while j >= 0:
-                if not self.is_sorting: return
-                self.comparisons += 1; self.stats_callback(self.comparisons, self.swaps)
-                self.update_callback(songs, {'compare': [j, i]}); time.sleep(self.delay)
+                if not self.is_sorting:
+                    return
+                self.comparisons += 1
+                self.stats_callback(self.comparisons, self.swaps)
+                self.update_callback(songs, {"compare": [j, i]})
+                time.sleep(self.delay)
                 if key_song.title.lower() < songs[j].title.lower():
                     songs[j + 1] = songs[j]
                     self.swaps += 1
-                    self.update_callback(songs, {'swap': [j, j+1]}); time.sleep(self.delay)
+                    self.update_callback(songs, {"swap": [j, j + 1]})
+                    time.sleep(self.delay)
                     j -= 1
-                else: break
+                else:
+                    break
             songs[j + 1] = key_song
-            self.update_callback(songs, {}); time.sleep(self.delay)
+            self.update_callback(songs, {})
+            time.sleep(self.delay)
