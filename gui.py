@@ -6,7 +6,6 @@ from core import MusicPlayer, SortingManager, Song
 from typing import List
 
 class AddSongDialog(simpledialog.Dialog):
-    """Dialog to get details for a new song."""
     def body(self, master):
         self.title("Add Song Details")
         tk.Label(master, text="Title:").grid(row=0, sticky='w')
