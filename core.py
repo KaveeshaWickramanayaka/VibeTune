@@ -221,7 +221,13 @@ class SortingManager:
         self.delay = 0.1
 
     def sort_in_thread(self, algorithm: str, songs_source):
-        songs = songs_source.to_list() if isinstance(songs_source, LinkedList) else songs_source
+        if isinstance(songs_source, list):
+            linked = LinkedList()
+            for song in songs_source:
+                linked.append(song)
+            songs = linked
+        else:
+            songs = songs_source
         if self.is_sorting:
             return
         self.is_sorting = True
@@ -231,70 +237,84 @@ class SortingManager:
         thread.daemon = True
         thread.start()
 
-    def _run_sort(self, algorithm: str, songs: List[Song]):
+    def _run_sort(self, algorithm: str, songs: LinkedList):
         sorter = getattr(self, f"_{algorithm.lower().replace(' ', '_')}")
         sorter(songs)
-        self.update_callback(songs, {})
+        self.update_callback(songs.to_list(), {})
         self.is_sorting = False
         self.finished_callback()
 
-    def _bubble_sort(self, songs: List[Song]):
-        n = len(songs)
-        for i in range(n):
+    def _bubble_sort(self, songs: LinkedList):
+        if not songs.head or not songs.head.next:
+            return
+        end = None
+        while end != songs.head:
             swapped = False
-            for j in range(0, n - i - 1):
+            current = songs.head
+            while current.next != end:
                 if not self.is_sorting:
                     return
                 self.comparisons += 1
                 self.stats_callback(self.comparisons, self.swaps)
-                self.update_callback(songs, {"compare": [j, j + 1]})
+                self.update_callback(songs.to_list(), {"compare": [current.data.title, current.next.data.title]})
                 time.sleep(self.delay)
-                if songs[j].title.lower() > songs[j + 1].title.lower():
-                    songs[j], songs[j + 1] = songs[j + 1], songs[j]
+                if current.data.title.lower() > current.next.data.title.lower():
+                    current.data, current.next.data = current.next.data, current.data
                     self.swaps += 1
-                    self.update_callback(songs, {"swap": [j, j + 1]})
+                    self.update_callback(songs.to_list(), {"swap": [current.data.title, current.next.data.title]})
                     time.sleep(self.delay)
+                    swapped = True
+                current = current.next
             if not swapped:
                 break
+            end = current
 
-    def _selection_sort(self, songs: List[Song]):
-        n = len(songs)
-        for i in range(n):
-            min_idx = i
-            for j in range(i + 1, n):
+    def _selection_sort(self, songs: LinkedList):
+        start = songs.head
+        while start:
+            min_node = start
+            current = start.next
+            while current:
                 if not self.is_sorting:
                     return
                 self.comparisons += 1
                 self.stats_callback(self.comparisons, self.swaps)
-                self.update_callback(songs, {"compare": [j, min_idx], "min": min_idx})
+                self.update_callback(songs.to_list(), {"compare": [current.data.title, min_node.data.title]})
                 time.sleep(self.delay)
-                if songs[j].title.lower() < songs[min_idx].title.lower():
-                    min_idx = j
-            if min_idx != i:
-                songs[i], songs[min_idx] = songs[min_idx], songs[i]
+                if current.data.title.lower() < min_node.data.title.lower():
+                    min_node = current
+                current = current.next
+            if min_node != start:
+                start.data, min_node.data = min_node.data, start.data
                 self.swaps += 1
-                self.update_callback(songs, {"swap": [i, min_idx]})
+                self.update_callback(songs.to_list(), {"swap": [start.data.title, min_node.data.title]})
                 time.sleep(self.delay)
+            start = start.next
 
-    def _insertion_sort(self, songs: List[Song]):
-        for i in range(1, len(songs)):
-            key_song = songs[i]
-            j = i - 1
-            while j >= 0:
-                if not self.is_sorting:
-                    return
-                self.comparisons += 1
-                self.stats_callback(self.comparisons, self.swaps)
-                self.update_callback(songs, {"compare": [j, i]})
-                time.sleep(self.delay)
-                if key_song.title.lower() < songs[j].title.lower():
-                    songs[j + 1] = songs[j]
-                    self.swaps += 1
-                    self.update_callback(songs, {"swap": [j, j + 1]})
+    def _insertion_sort(self, songs: LinkedList):
+        if not songs.head or not songs.head.next:
+            return
+        sorted_head = songs.head
+        current = sorted_head.next
+        sorted_head.next = None
+        while current:
+            if not self.is_sorting:
+                return
+            key_node = current
+            current = current.next
+            if key_node.data.title.lower() < sorted_head.data.title.lower():
+                key_node.next = sorted_head
+                sorted_head = key_node
+            else:
+                search = sorted_head
+                while search.next and search.next.data.title.lower() < key_node.data.title.lower():
+                    self.comparisons += 1
+                    self.stats_callback(self.comparisons, self.swaps)
+                    self.update_callback(songs.to_list(), {"compare": [key_node.data.title, search.next.data.title]})
                     time.sleep(self.delay)
-                    j -= 1
-                else:
-                    break
-            songs[j + 1] = key_song
-            self.update_callback(songs, {})
+                    search = search.next
+                key_node.next = search.next
+                search.next = key_node
+            songs.head = sorted_head
+            self.update_callback(songs.to_list(), {})
             time.sleep(self.delay)
